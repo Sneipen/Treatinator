@@ -4,28 +4,31 @@
 #include <EEPROM.h>
 #include "DFRobotDFPlayerMini.h"
 
-// Remote buttons
+// TV-remote buttons
 const uint32_t gardin = 0xDF20FB04;
 const uint32_t red = 0x8D72FB04;
 const uint32_t green = 0x8E71FB04;
 const uint32_t yellow = 0x9C63FB04;
 const uint32_t blue = 0x9E61FB04;
 
+// IR receiver pin
 const int receiverPin = 36;
 
-// Defines the number of steps per rotation
+// Defines the number of steps per rotation stepper
 const int stepsPerRevolution = 2048;
 
-// Sensor pins for detecting aluminum tape
+// Sensor pins for detecting reflective tape on conveyor belt
 const int sensorPins[4] = {52, 50, 48, 46};
 
 // Stepper motor pins for each conveyor
 Stepper steppers[4] = {    // IN1, IN3, IN2, IN4
-    Stepper(stepsPerRevolution, 47, 51, 49, 53),  // Stepper 1 - 47,49,51,53
-    Stepper(stepsPerRevolution, 23, 27, 25, 29),  // Stepper 2 - 23,25,27,29
-    Stepper(stepsPerRevolution, 39, 43, 41, 45), // Stepper 3 - 39,41,43,45
-    Stepper(stepsPerRevolution, 31, 35, 33, 37)  // Stepper 4 - 31,33,35,37
+    Stepper(stepsPerRevolution, 47, 51, 49, 53),
+    Stepper(stepsPerRevolution, 23, 27, 25, 29),
+    Stepper(stepsPerRevolution, 39, 43, 41, 45),
+    Stepper(stepsPerRevolution, 31, 35, 33, 37)
 };
+
+const int extraSteps = 740; // Extra steps to move past tape. Adjust as needed
 
 // LED settings
 #define NUM_LEDS 13
@@ -37,20 +40,18 @@ const CRGB conveyorColors[4] = {CRGB::Red, CRGB::Green, CRGB::Gold, CRGB::Blue};
 static uint8_t hueBase = 0;              // base hue for our rainbow
 static int currentFrame = 0;
 
-CRGBPalette16 currentPalette = RainbowColors_p;
-uint8_t previousLedsToLight = 0;
-float currentDisplayedLEDs = 0.0;
-
 // Timing variables
 unsigned long previousMillis[4] = {0, 0, 0, 0};
 const unsigned long ledInterval = 30; // Milliseconds between LED updates
 
+// Sound variables
 DFRobotDFPlayerMini player;
 const int num_updates = 434;
 const uint8_t lastTrackNumber = 11;
 const int trackNumberAddr = 0;
 int trackNumber = 1;
 
+// Each array represents the number of lights to turn on for each LED strip update
 const uint8_t tracks[lastTrackNumber][num_updates] PROGMEM = {
   {1, 3, 8, 4, 5, 7, 7, 6, 6, 6, 6, 6, 6, 6, 5, 4, 4, 4, 3, 4, 4, 4, 6, 11, 7, 6, 5, 5, 4, 4, 4, 5, 6, 6, 6, 4, 3, 3, 3, 5, 6, 5, 5, 4, 9, 5, 5, 5, 4, 3, 7, 6, 6, 6, 4, 3, 4, 4, 6, 7, 5, 6, 7, 4, 8, 4, 4, 8, 7, 6, 7, 5, 3, 3, 3, 3, 6, 7, 5, 9, 6, 7, 6, 5, 6, 8, 6, 5, 5, 5, 5, 3, 4, 4, 6, 7, 6, 5, 5, 4, 8, 4, 9, 7, 5, 5, 6, 6, 5, 4, 5, 6, 6, 6, 6, 5, 7, 9, 4, 5, 10, 13, 12, 13, 13, 11, 8, 7, 8, 10, 10, 9, 10, 9, 10, 13, 10, 10, 11, 12, 12, 13, 12, 10, 7, 4, 6, 8, 7, 6, 6, 5, 5, 9, 5, 6, 11, 13, 13, 13, 12, 9, 6, 4, 5, 9, 10, 10, 10, 9, 10, 13, 10, 11, 12, 12, 13, 12, 12, 9, 6, 4, 6, 8, 8, 8, 7, 4, 7, 3, 3, 8, 13, 13, 13, 13, 11, 8, 5, 6, 10, 10, 10, 9, 10, 8, 10, 4, 4, 10, 12, 12, 13, 12, 11, 8, 5, 4, 7, 11, 10, 11, 9, 10, 13, 9, 10, 11, 13, 12, 13, 12, 11, 7, 4, 7, 9, 10, 10, 10, 9, 13, 10, 10, 10, 12, 12, 12, 12, 13, 9, 7, 5, 5, 10, 10, 10, 11, 10, 13, 10, 9, 11, 12, 13, 13, 13, 12, 10, 7, 7, 10, 10, 10, 10, 10, 10, 13, 10, 10, 10, 12, 12, 13, 13, 11, 9, 7, 6, 8, 7, 6, 8, 6, 5, 10, 5, 6, 9, 13, 12, 13, 12, 11, 8, 5, 4, 9, 11, 10, 10, 9, 9, 13, 10, 10, 11, 12, 12, 12, 13, 11, 9, 7, 6, 6, 5, 8, 7, 7, 10, 6, 7, 6, 11, 13, 12, 13, 12, 11, 9, 8, 9, 10, 10, 10, 10, 10, 12, 5, 6, 7, 11, 12, 12, 13, 12, 10, 8, 7, 7, 10, 10, 10, 10, 9, 13, 10, 10, 10, 12, 13, 13, 12, 12, 9, 7, 6, 7, 11, 10, 10, 10, 10, 13, 9, 10, 10, 12, 12, 13, 13, 12, 10, 6, 7, 7, 7, 6, 6, 5, 4, 8, 4, 5, 10, 13, 13, 13, 13, 11, 9, 7, 9, 10, 10, 9, 10, 10, 13, 9, 10, 10, 11, 12, 12, 13, 12, 11, 8, 6, 7, 8, 8},
   {1, 7, 3, 3, 3, 3, 3, 3, 6, 7, 5, 5, 6, 7, 6, 5, 6, 8, 5, 6, 7, 6, 5, 5, 6, 5, 5, 5, 4, 5, 5, 5, 6, 6, 5, 8, 5, 4, 5, 6, 3, 3, 2, 2, 2, 10, 13, 13, 12, 9, 8, 9, 11, 10, 13, 10, 9, 10, 9, 10, 10, 9, 9, 12, 12, 13, 11, 8, 6, 7, 9, 13, 10, 9, 9, 9, 9, 8, 7, 7, 7, 13, 12, 12, 10, 7, 5, 8, 8, 8, 10, 9, 12, 8, 8, 8, 8, 8, 9, 13, 12, 11, 9, 6, 7, 8, 8, 9, 9, 10, 13, 9, 8, 9, 8, 8, 12, 11, 12, 11, 9, 6, 6, 7, 8, 9, 8, 7, 11, 7, 7, 7, 7, 7, 13, 12, 12, 11, 7, 6, 7, 8, 10, 11, 11, 10, 13, 9, 9, 9, 8, 7, 13, 12, 12, 10, 8, 7, 9, 10, 10, 11, 10, 13, 8, 8, 9, 8, 8, 10, 13, 12, 11, 9, 6, 6, 7, 8, 9, 10, 9, 13, 9, 9, 9, 8, 8, 12, 12, 12, 11, 9, 6, 8, 9, 9, 10, 9, 10, 13, 9, 8, 8, 8, 8, 13, 12, 12, 10, 7, 6, 6, 7, 7, 9, 8, 8, 12, 8, 8, 8, 8, 8, 13, 12, 12, 10, 6, 6, 7, 8, 8, 10, 8, 8, 11, 8, 7, 7, 7, 10, 13, 12, 11, 8, 5, 6, 6, 7, 8, 9, 8, 8, 12, 8, 7, 7, 7, 12, 12, 12, 10, 8, 5, 5, 7, 6, 8, 8, 8, 12, 7, 7, 7, 7, 6, 13, 12, 12, 10, 7, 6, 5, 7, 7, 9, 8, 7, 7, 11, 7, 7, 7, 10, 13, 12, 12, 10, 7, 9, 8, 8, 9, 10, 9, 9, 13, 10, 9, 9, 9, 12, 12, 12, 11, 8, 7, 5, 7, 8, 10, 10, 9, 9, 13, 9, 9, 10, 10, 12, 11, 13, 11, 8, 8, 10, 10, 11, 10, 10, 10, 9, 13, 10, 9, 10, 8, 13, 12, 12, 10, 7, 8, 11, 11, 10, 10, 10, 10, 10, 13, 9, 9, 9, 10, 13, 12, 11, 9, 6, 5, 7, 9, 9, 10, 9, 9, 8, 13, 8, 8, 8, 12, 12, 12, 11, 8, 6, 7, 8, 9, 8, 9, 9, 9, 8, 13, 9, 7, 8, 13, 12, 12, 10, 8, 7, 8, 8, 8, 9, 8, 7, 8, 12, 7, 8, 8, 9, 13, 12, 12, 10, 6, 6, 7, 7, 9, 9, 9, 8, 8, 11, 8, 8},
@@ -83,7 +84,7 @@ void setup() {
 
   IrReceiver.begin(receiverPin, ENABLE_LED_FEEDBACK);
 
-  // Initialize LED strips individually (due to compile-time constant requirement)
+  // Initialize LED strips
   FastLED.addLeds<WS2812, 44, GRB>(leds[0], NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.addLeds<WS2812, 42, GRB>(leds[1], NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.addLeds<WS2812, 40, GRB>(leds[2], NUM_LEDS).setCorrection(TypicalLEDStrip);
@@ -91,6 +92,7 @@ void setup() {
 
   FastLED.setBrightness(BRIGHTNESS);
   FastLED.clear();
+  // Initialize all LEDs to off
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < NUM_LEDS; j++) {
       leds[i][j] = CRGB::Black;
@@ -104,21 +106,19 @@ void setup() {
   
   player.begin(Serial2);
   
-
+ 
   EEPROM.get(trackNumberAddr, trackNumber);
-  
   if (trackNumber < 1 || trackNumber > lastTrackNumber) { // This means track was never set, and we start at track 1
     trackNumber = 1;
     EEPROM.put(trackNumberAddr, trackNumber);
   }
 
   player.volume(17);
-  
-  
 }
 
 void loop() {
 
+  // check for bluetooth command
   if (Serial1.available()) {
     int conveyor;
     String message = Serial1.readStringUntil('\n'); // stops at newline
@@ -146,6 +146,7 @@ void loop() {
     }
 }
   
+  // Check for TV-remote signal
   if (IrReceiver.decode()) {
     // Print the decoded value
     uint32_t receivedSignal = IrReceiver.decodedIRData.decodedRawData;
@@ -227,9 +228,9 @@ void feed(int conveyor) {
     }
   }
 
-  // Perform extra steps after tape is detected
+  // Perform extra steps after tape is detected in order to step past the tape.
   int num_steps_taken = 0;
-  while(num_steps_taken < 740) {
+  while(num_steps_taken < extraSteps) {
     if(conveyor % 2) {
       steppers[conveyor].step(1);
     } else {
@@ -253,7 +254,7 @@ void feed(int conveyor) {
   }
     
     
-  
+  // set to LEDS to off
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[conveyor][i] = CRGB::Black;
   }
@@ -264,7 +265,7 @@ void feed(int conveyor) {
 
 
 void disableStepper() {
-  // Set all stepper pins to LOW
+  // Set all stepper pins to LOW. Stepper internal gearbox friction will hold the motor in place.
     digitalWrite(47, LOW);
     digitalWrite(49, LOW);
     digitalWrite(51, LOW);
@@ -286,7 +287,11 @@ void disableStepper() {
     digitalWrite(37, LOW);
   }
 
-
+/*
+ This function will get the current track number from EEPROM, play the track, and increment the track number.
+ If the track number exceeds the last track number, it will reset to 1.
+ This way we always cycle through the tracks.
+*/
 void playTrack() {
   EEPROM.get(trackNumberAddr, trackNumber);
 
@@ -300,7 +305,11 @@ void playTrack() {
   EEPROM.put(trackNumberAddr, trackNumber);
 }
 
-
+/*
+This function will play a voice message based on the conveyor number.
+For instance "DOGNAME chooses a bone"
+Comment out this and related code if you don't want voice messages.
+*/
 void playVoice(int conveyor) {
   player.volume(17);
   if(conveyor == 0) {
@@ -318,7 +327,9 @@ void playVoice(int conveyor) {
   delay(3000);
 }
 
-
+/*
+ This function runs if the bluetooth command is received (from the choice board)
+*/
 void bluetoothFeed(int conveyor) {
   playVoice(conveyor);
   int playerVolume = 17;
@@ -359,7 +370,7 @@ void bluetoothFeed(int conveyor) {
 
   // Perform extra steps after tape is detected
   int num_steps_taken = 0;
-  while(num_steps_taken < 740) {
+  while(num_steps_taken < extraSteps) {
     if(conveyor % 2) {
       steppers[conveyor].step(1);
     } else {
@@ -382,17 +393,17 @@ void bluetoothFeed(int conveyor) {
       soundLightShow();
     }
 
-  unsigned long currentMillis = millis();
-  // Song is 13s long. If 10s played decrement 1 vol every 176 millis in order to get to low volume in a 3 second transition
-  if ((currentMillis - trackStartTime > 10000) && 
-      (lastVolumeDecreaseTime == 0 || currentMillis - lastVolumeDecreaseTime > 176)) {
-    
-    if (playerVolume > 3) {
-      playerVolume--;
-      player.volume(playerVolume);
-      lastVolumeDecreaseTime = currentMillis;
+    unsigned long currentMillis = millis();
+    // Song is 13s long. If 10s played decrement 1 vol every 176 millis in order to get to low volume in a 3 second transition
+    if ((currentMillis - trackStartTime > 10000) && 
+        (lastVolumeDecreaseTime == 0 || currentMillis - lastVolumeDecreaseTime > 176)) {
+      
+      if (playerVolume > 3) {
+        playerVolume--;
+        player.volume(playerVolume);
+        lastVolumeDecreaseTime = currentMillis;
+      }
     }
-  }
   }
 
    hueBase = 0;
@@ -409,25 +420,24 @@ void bluetoothFeed(int conveyor) {
 }
 
 
-
-
-
+/*
+ This function will animate the LED strips based on the song playing
+*/
 void soundLightShow() {
-  // 1) Read how many LEDs to light from the array in PROGMEM
-  //    Each element in the track array is assumed to be between 0 and 13.
   if (currentFrame > num_updates) {
     return;
   }
+  // Read how many LEDs to light from the array in PROGMEM
   uint8_t ledsToLight = pgm_read_byte(&tracks[trackNumber - 1][currentFrame]);
 
-  // 2) Increment hueBase to animate the rainbow over time
+  // Increment hueBase to animate the colors over time
   hueBase++;
 
-  // 3) Update each of the 4 LED strips
+  // Update each of the 4 LED strips
   for (int stripIndex = 0; stripIndex < 4; stripIndex++) {
     for (int i = 0; i < NUM_LEDS; i++) {
       if (i < ledsToLight) {
-        // For active LEDs: set a fresh rainbow color without fading
+        // For active LEDs: set a fresh color without fading
         leds[stripIndex][i] = CHSV(hueBase + i * 10, 255, 255);
       } else {
         // For LEDs not meant to be lit, fade them gradually
@@ -436,9 +446,9 @@ void soundLightShow() {
     }
   }
 
-  // 4) Display the updated LED colors
+  // Display the updated LED colors
   FastLED.show();
 
-  // 5) Move to the next frame for the next update
+  // Move to the next frame for the next update
   currentFrame++;
 }

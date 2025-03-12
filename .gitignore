@@ -12,3 +12,7 @@ Thumbs.db
 
 # Other temporary or log files you might not need
 *.log
+
+machine/.gitignore
+
+Choice_board/.gitignore
