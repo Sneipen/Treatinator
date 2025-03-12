@@ -1,0 +1,14 @@
+# MacOS clutter
+.DS_Store
+
+# Windows clutter
+Thumbs.db
+
+# PlatformIO build folder (contains compiled binaries, etc.)
+.pio/
+
+# Local VS Code settings
+.vscode/
+
+# Other temporary or log files you might not need
+*.log
