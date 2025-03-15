@@ -11,6 +11,10 @@ const uint32_t green = 0x8E71FB04;
 const uint32_t yellow = 0x9C63FB04;
 const uint32_t blue = 0x9E61FB04;
 
+// roller blind
+const int rollerBlindSwitchPin = 7;
+Stepper rollerBlindStepper = Stepper(stepsPerRevolution, 8, 10, 9, 11);
+
 // IR receiver pin
 const int receiverPin = 36;
 
@@ -74,6 +78,7 @@ void playTrack();
 void playVoice(int conveyor);
 void disableStepper();
 void soundLightShow();
+void openOrCloseRollerBlind();
 
 void setup() {
   // Initialize the stepper motor speed and sensor pins
@@ -81,6 +86,9 @@ void setup() {
     steppers[i].setSpeed(6);           // Set speed for each stepper
     pinMode(sensorPins[i], INPUT);     // Set sensor pins as input
   }
+  
+  rollerBlindStepper.setSpeed(20);
+  pinMode(rollerBlindSwitchPin, INPUT_PULLUP);
 
   IrReceiver.begin(receiverPin, ENABLE_LED_FEEDBACK);
 
@@ -140,7 +148,6 @@ void loop() {
     else {
       conveyor = -1;
     }
-
     if(conveyor != -1) {
       bluetoothFeed(conveyor);
     }
@@ -170,6 +177,11 @@ void loop() {
     else if(receivedSignal == blue) {
       Serial.println("Blue button clicked");
       conveyor = 3;
+    }
+    else if(receivedSignal == gardin) {
+      Serial.println("Gardin button clicked");
+      openOrCloseRollerBlind();
+      conveyor = -1;
     }
     else {
       Serial.println("Unknown signal..");
@@ -451,4 +463,29 @@ void soundLightShow() {
 
   // Move to the next frame for the next update
   currentFrame++;
+}
+
+
+void openOrCloseRollerBlind() {
+  int switchState = digitalRead(rollerBlindSwitchPin);
+  int stepsMade = 0;
+
+  if(switchState == LOW) { // Means blind is rolled up and we should roll down
+    while(stepsMade < 10000) {
+      rollerBlindStepper.step(1);
+      stepsMade++;
+    }
+  }
+  else { // Means blind is down, and we should roll up
+    while(digitalRead(rollerBlindSwitchPin) == HIGH) {
+      rollerBlindStepper.step(-1);
+    }
+    // extra steps to make sure switch is properly closed.
+    rollerBlindStepper.step(-10);
+  }
+
+  digitalWrite(8, LOW);
+  digitalWrite(10, LOW);
+  digitalWrite(9, LOW);
+  digitalWrite(11, LOW);
 }
