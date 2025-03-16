@@ -150,6 +150,7 @@ void loop() {
     }
     if(conveyor != -1) {
       bluetoothFeed(conveyor);
+      disableStepper();
     }
 }
   
@@ -192,6 +193,7 @@ void loop() {
 
     if(conveyor != -1) {
       feed(conveyor);
+      disableStepper();
     }
     // Resume receiver for the next signal
     IrReceiver.resume();
@@ -271,7 +273,6 @@ void feed(int conveyor) {
     leds[conveyor][i] = CRGB::Black;
   }
   FastLED.show();
-  disableStepper();
   Serial.print("Feeding completed. Waiting for the next command.");
 }
 
